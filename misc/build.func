@@ -4000,7 +4000,7 @@ EOF
 
     # Wait for IP assignment (IPv4 or IPv6)
     local ip_in_lxc=""
-    for i in {1..20}; do
+    for i in {1..60}; do
       # Try IPv4 first
       ip_in_lxc=$(pct exec "$CTID" -- ip -4 addr show dev eth0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1)
       # Fallback to IPv6 if IPv4 not available
