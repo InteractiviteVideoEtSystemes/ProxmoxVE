@@ -15,6 +15,16 @@ ives_ghfetch() {                                  # <repo> <branch> <path> [toke
     curl -fsSL "https://raw.githubusercontent.com/$1/$2/$3"
   fi
 }
+# Gateway en configuration routee (ex. IP publique OVH + gateway sur bridge prive) :
+# accepter si la passerelle est dans le sous-reseau OU si c'est une adresse privee.
+is_private_ipv4() {
+  local ip="${1%%/*}"
+  [[ "$ip" =~ ^10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] && return 0
+  [[ "$ip" =~ ^172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}$ ]] && return 0
+  [[ "$ip" =~ ^192\.168\.[0-9]{1,3}\.[0-9]{1,3}$ ]] && return 0
+  return 1
+}
+ives_gateway_ok() { validate_gateway_in_subnet "$1" "$2" || is_private_ipv4 "$2"; }
 # ============================================================================
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: tteck (tteckster) | MickLesk | michelroegl-brunner
@@ -1018,8 +1028,8 @@ base_settings() {
     msg_warn "Ignoring var_gateway '$GATE' because var_net is 'dhcp'"
     GATE=""
   elif [[ "$NET" != "dhcp" && -n "$GATE" ]]; then
-    if ! validate_gateway_in_subnet "$NET" "$GATE"; then
-      msg_warn "Ignoring var_gateway '$GATE' because it is not in subnet of var_net '$NET'"
+    if ! ives_gateway_ok "$NET" "$GATE"; then
+      msg_warn "Ignoring var_gateway '$GATE' because it is neither in subnet of var_net '$NET' nor a private (RFC1918) address"
       GATE=""
     fi
   fi
@@ -2275,7 +2285,7 @@ advanced_settings() {
                 3>&1 1>&2 2>&3); then
                 if validate_gateway_ip "$gateway_ip"; then
                   # Validate gateway is in same subnet
-                  if validate_gateway_in_subnet "$static_ip" "$gateway_ip"; then
+                  if ives_gateway_ok "$static_ip" "$gateway_ip"; then
                     _net="$static_ip"
                     _gate=",gw=$gateway_ip"
                     ((STEP++))
@@ -2313,7 +2323,7 @@ advanced_settings() {
                   3>&1 1>&2 2>&3); then
                   if validate_gateway_ip "$gateway_ip"; then
                     # Validate gateway is in same subnet
-                    if validate_gateway_in_subnet "$NET_RESOLVED" "$gateway_ip"; then
+                    if ives_gateway_ok "$NET_RESOLVED" "$gateway_ip"; then
                       _net="$NET_RESOLVED"
                       _gate=",gw=$gateway_ip"
                       ((STEP++))
