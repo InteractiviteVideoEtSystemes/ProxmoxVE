@@ -1,4 +1,21 @@
 #!/usr/bin/env bash
+
+# ===== IVES_PATCH_MARKER : sources surchargeables ============================
+: "${FUNC_REPO:=community-scripts/ProxmoxVE}"     # dépôt framework (public)
+: "${FUNC_BRANCH:=main}"
+FUNC_RAW="https://raw.githubusercontent.com/${FUNC_REPO}/${FUNC_BRANCH}"
+: "${INSTALL_REPO:=$FUNC_REPO}"                   # dépôt des install/<app>.sh (privé possible)
+: "${INSTALL_BRANCH:=$FUNC_BRANCH}"
+: "${INSTALL_TOKEN:=}"                            # PAT lecture seule si INSTALL_REPO est privé
+ives_ghfetch() {                                  # <repo> <branch> <path> [token]
+  if [ -n "${4:-}" ]; then
+    curl -fsSL -H "Authorization: Bearer $4" -H "Accept: application/vnd.github.raw" \
+      "https://api.github.com/repos/$1/contents/$3?ref=$2"
+  else
+    curl -fsSL "https://raw.githubusercontent.com/$1/$2/$3"
+  fi
+}
+# ============================================================================
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: tteck (tteckster) | MickLesk | michelroegl-brunner
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/branch/main/LICENSE
@@ -88,16 +105,16 @@ variables() {
   fi
 }
 
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
+source <(curl -fsSL ${FUNC_RAW}/misc/api.func)
 
 if command -v curl >/dev/null 2>&1; then
-  source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/core.func)
-  source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/error_handler.func)
+  source <(curl -fsSL ${FUNC_RAW}/misc/core.func)
+  source <(curl -fsSL ${FUNC_RAW}/misc/error_handler.func)
   load_functions
   catch_errors
 elif command -v wget >/dev/null 2>&1; then
-  source <(wget -qO- https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/core.func)
-  source <(wget -qO- https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/error_handler.func)
+  source <(wget -qO- ${FUNC_RAW}/misc/core.func)
+  source <(wget -qO- ${FUNC_RAW}/misc/error_handler.func)
   load_functions
   catch_errors
 fi
@@ -3819,7 +3836,7 @@ runtime_script_status_guard() {
 # ------------------------------------------------------------------------------
 
 start() {
-  source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/tools.func)
+  source <(curl -fsSL ${FUNC_RAW}/misc/tools.func)
   if command -v pveversion >/dev/null 2>&1; then
     runtime_script_status_guard || return 0
     install_script || return 0
@@ -4035,9 +4052,9 @@ build_container() {
   # Build PCT_OPTIONS as string for export
   local _func_url
   if [ "$var_os" == "alpine" ]; then
-    _func_url="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/alpine-install.func"
+    _func_url="${FUNC_RAW}/misc/alpine-install.func"
   else
-    _func_url="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/install.func"
+    _func_url="${FUNC_RAW}/misc/install.func"
   fi
   export FUNCTIONS_FILE_PATH="$(curl -fsSL "$_func_url")"
   if [[ -z "$FUNCTIONS_FILE_PATH" || ${#FUNCTIONS_FILE_PATH} -lt 100 ]]; then
@@ -4581,6 +4598,15 @@ EOF
         install_exit_code=1
       fi
     }
+  elif pct exec "$CTID" -- sh -c 'command -v dnf >/dev/null 2>&1'; then
+    # IVES: paquets de base pour la famille RHEL (AlmaLinux/Rocky/CentOS/Fedora)
+    sleep 3
+    local _tz_rhel="${tz:-UTC}"
+    pct exec "$CTID" -- bash -c "test -e /usr/share/zoneinfo/$_tz_rhel && ln -sf /usr/share/zoneinfo/$_tz_rhel /etc/localtime || true"
+    pct exec "$CTID" -- bash -c "dnf -y install sudo curl nano jq tar" >>"$BUILD_LOG" 2>&1 || {
+      msg_error "dnf base packages installation failed"
+      install_exit_code=1
+    }
   else
     sleep 3
     LANG=${LANG:-en_US.UTF-8}
@@ -4790,7 +4816,7 @@ EOF
     export CONTAINER_INSTALLING=true
 
     local _install_script
-    _install_script="$(curl -fsSL "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/${var_install}.sh")"
+    _install_script="$(ives_ghfetch "$INSTALL_REPO" "$INSTALL_BRANCH" "install/${var_install}.sh" "$INSTALL_TOKEN")"
     lxc-attach -n "$CTID" -- bash -c "$_install_script"
     local lxc_exit=$?
 
@@ -5114,7 +5140,7 @@ EOF
         if [[ "${DEV_MODE_MOTD:-false}" == "true" ]]; then
           echo -e "${TAB}${HOLD}${DGN}Setting up MOTD and SSH for debugging...${CL}"
           if pct exec "$CTID" -- bash -c "
-              source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/install.func)
+              source <(curl -fsSL ${FUNC_RAW}/misc/install.func)
               declare -f motd_ssh >/dev/null 2>&1 && motd_ssh || true
             " >/dev/null 2>&1; then
             local ct_ip=$(pct exec "$CTID" ip a s dev eth0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1)
@@ -5187,7 +5213,7 @@ EOF
           set +Eeuo pipefail
           trap - ERR
           local _install_script
-          _install_script="$(curl -fsSL "https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/${var_install}.sh")"
+          _install_script="$(ives_ghfetch "$INSTALL_REPO" "$INSTALL_BRANCH" "install/${var_install}.sh" "$INSTALL_TOKEN")"
           lxc-attach -n "$CTID" -- bash -c "$_install_script"
           local apt_retry_exit=$?
           set -Eeuo pipefail
