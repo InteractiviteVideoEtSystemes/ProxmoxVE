@@ -4072,6 +4072,9 @@ build_container() {
     exit 115
   fi
 
+  # IVES: socle serveur prive (contenu injecte dans le conteneur ; le token reste sur l'hote)
+  IVES_BASE_FUNC="$(ives_ghfetch "$INSTALL_REPO" "$INSTALL_BRANCH" "misc/ives-base.func" "$INSTALL_TOKEN" 2>/dev/null || true)"
+  export IVES_BASE_FUNC
   # Core exports for install.func
   export DIAGNOSTICS="$DIAGNOSTICS"
   export RANDOM_UUID="$RANDOM_UUID"
