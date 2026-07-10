@@ -4074,6 +4074,9 @@ build_container() {
 
   # IVES: socle serveur prive (contenu injecte dans le conteneur ; le token reste sur l'hote)
   IVES_BASE_FUNC="$(ives_ghfetch "$INSTALL_REPO" "$INSTALL_BRANCH" "misc/ives-base.func" "$INSTALL_TOKEN" 2>/dev/null || true)"
+  if [[ -z "$IVES_BASE_FUNC" ]]; then
+    msg_warn "IVES: misc/ives-base.func introuvable sur ${INSTALL_REPO}@${INSTALL_BRANCH} (commit/push manquant ?) — le socle ne sera pas injecte"
+  fi
   export IVES_BASE_FUNC
   # IVES: infos d'hote pour le socle (detection preprod fiable, independante du DNS)
   export IVES_HOSTNAME="${HN:-}"
