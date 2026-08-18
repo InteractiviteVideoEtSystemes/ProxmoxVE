@@ -4082,6 +4082,16 @@ build_container() {
   export IVES_HOSTNAME="${HN:-}"
   export IVES_DOMAIN="${var_domain:-${var_searchdomain:-}}"
   export IVES_FQDN="${HN:-}${IVES_DOMAIN:+.${IVES_DOMAIN}}"
+  # IVES: comptes generiques (operation = sudo avec mot de passe ; 4n51bl3 = NOPASSWD)
+  # Les mots de passe (root + operation) sont generes et poses par l'HOTE apres
+  # l'install (ives_set_passwords, transmission par stdin) puis livres via PrivateBin.
+  # -> rien n'est exporte dans l'environnement du conteneur ici.
+  # Cles SSH publiques (fichiers a renseigner ; URL brute ou API+token du depot prive)
+  IVES_SSH_KEY_OPERATION="$(ives_ghfetch "$INSTALL_REPO" "$INSTALL_BRANCH" "keys/operation.pub" "$INSTALL_TOKEN" 2>/dev/null || true)"
+  IVES_SSH_KEY_ANSIBLE="$(ives_ghfetch "$INSTALL_REPO" "$INSTALL_BRANCH" "keys/4n51bl3.pub" "$INSTALL_TOKEN" 2>/dev/null || true)"
+  export IVES_SSH_KEY_OPERATION IVES_SSH_KEY_ANSIBLE
+  [[ -z "$IVES_SSH_KEY_OPERATION" ]] && msg_warn "IVES: keys/operation.pub introuvable sur ${INSTALL_REPO}@${INSTALL_BRANCH} — compte operation sans cle SSH"
+  [[ -z "$IVES_SSH_KEY_ANSIBLE" ]] && msg_warn "IVES: keys/4n51bl3.pub introuvable sur ${INSTALL_REPO}@${INSTALL_BRANCH} — compte 4n51bl3 sans cle SSH"
   # Core exports for install.func
   export DIAGNOSTICS="$DIAGNOSTICS"
   export RANDOM_UUID="$RANDOM_UUID"
