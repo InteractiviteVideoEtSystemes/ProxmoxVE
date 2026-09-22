@@ -25,7 +25,13 @@ $STD apt install -y \
   procps \
   vlc-bin \
   vlc-plugin-base \
-  streamlink
+  streamlink \
+  autoconf \
+  libtool \
+  libargtable2-dev \
+  libavformat-dev \
+  libsdl2-dev \
+  libswscale-dev
 msg_ok "Installed Dependencies"
 
 setup_uv
@@ -33,6 +39,15 @@ NODE_VERSION="24" setup_nodejs
 PG_VERSION="16" setup_postgresql
 PG_DB_NAME="dispatcharr_db" PG_DB_USER="dispatcharr_usr" setup_postgresql_db
 fetch_and_deploy_gh_release "dispatcharr" "Dispatcharr/Dispatcharr" "tarball"
+fetch_and_deploy_gh_release "Comskip" "erikkaashoek/Comskip" "tarball"
+
+msg_info "Compiling Comskip"
+cd /opt/Comskip
+$STD ./autogen.sh
+$STD ./configure
+$STD make
+$STD make install
+msg_ok "Compiled and Installed Comskip"
 
 msg_info "Installing Python Dependencies with uv"
 cd /opt/dispatcharr
@@ -139,9 +154,7 @@ server {
     }
 }
 EOF
-ln -sf /etc/nginx/sites-available/dispatcharr.conf /etc/nginx/sites-enabled/dispatcharr.conf
-rm -f /etc/nginx/sites-enabled/default
-systemctl restart nginx
+nginx_enable_site dispatcharr.conf
 msg_ok "Configured Nginx"
 
 msg_info "Creating Services"
@@ -176,7 +189,7 @@ cd /opt/dispatcharr
 set -a
 source .env
 set +a
-exec uv run celery -A dispatcharr worker -l info -c 4
+exec uv run celery -A dispatcharr worker -l info -c 4 -Q celery,recordings,dvr,default
 EOF
 chmod +x /opt/dispatcharr/start-celery.sh
 

@@ -25,7 +25,8 @@ $STD apt install -y \
   rrdtool \
   snmp \
   snmpd \
-  whois
+  whois \
+  ipmitool
 msg_ok "Installed Dependencies"
 
 msg_info "Installing Python Dependencies"
@@ -80,7 +81,7 @@ sed -i "s/listen = \/run\/php\/php8.4-fpm.sock/listen = \/run\/php-fpm-librenms.
 msg_ok "Configured PHP-FPM"
 
 msg_info "Configure Nginx"
-cat <<EOF >/etc/nginx/sites-enabled/librenms
+cat <<EOF >/etc/nginx/sites-available/librenms
 server {
  listen      80;
  server_name ${LOCAL_IP};
@@ -103,8 +104,7 @@ server {
  }
 }
 EOF
-rm /etc/nginx/sites-enabled/default
-$STD systemctl reload nginx
+nginx_enable_site librenms
 systemctl restart php8.4-fpm
 msg_ok "Configured Nginx"
 
@@ -129,7 +129,7 @@ $STD su - librenms -s /bin/bash -c "cd /opt/librenms && lnms db:seed --force"
 $STD su - librenms -s /bin/bash -c "cd /opt/librenms && lnms user:add -p ${APP_PASSWORD} ${APP_USER} --role=admin"
 
 RANDOM_STRING=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9')
-sed -i "s/RANDOMSTRINGHERE/$RANDOM_STRING/g" /etc/snmp/snmpd.conf
+sed -i "s/RANDOMSTRINGGOESHERE/$RANDOM_STRING/g" /etc/snmp/snmpd.conf
 echo "SNMP Community String: $RANDOM_STRING" >>~/librenms.creds
 curl -qso /usr/bin/distro https://raw.githubusercontent.com/librenms/librenms-agent/master/snmp/distro
 chmod +x /usr/bin/distro

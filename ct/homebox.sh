@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_CS_DEFAULT_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main"
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 # Copyright (c) 2021-2026 tteck
 # Author: tteck | Co-Author: MickLesk (Canbiz)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -39,8 +41,12 @@ function update_script() {
     systemctl stop homebox
     msg_ok "Stopped Service"
 
+    create_backup /opt/homebox/.env /opt/homebox/.data
+
     CLEAN_INSTALL=1 fetch_and_deploy_gh_release "homebox" "sysadminsmedia/homebox" "prebuild" "latest" "/opt/homebox" "homebox_Linux_$(arch_resolve "x86_64" "arm64").tar.gz"
     chmod +x /opt/homebox/homebox
+
+    restore_backup
     [ -f /opt/.env ] && mv /opt/.env /opt/homebox/.env
     [ -d /opt/.data ] && mv /opt/.data /opt/homebox/.data
 

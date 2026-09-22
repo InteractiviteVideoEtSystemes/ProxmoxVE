@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_CS_DEFAULT_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main"
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: vhsdream
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -36,19 +38,16 @@ function update_script() {
     [[ -f /etc/systemd/system/scanopy-daemon.service ]] && systemctl stop scanopy-daemon
     msg_ok "Stopped services"
 
-    msg_info "Backing up configurations"
-    cp /opt/scanopy/.env /opt/scanopy.env
-    [[ -f /opt/scanopy/oidc.toml ]] && cp /opt/scanopy/oidc.toml /opt/scanopy.oidc.toml
-    msg_ok "Backed up configurations"
+    create_backup /opt/scanopy/.env /opt/scanopy/oidc.toml
 
     CLEAN_INSTALL=1 fetch_and_deploy_gh_release "Scanopy" "scanopy/scanopy" "tarball" "latest" "/opt/scanopy"
+
+    restore_backup
 
     ensure_dependencies pkg-config libssl-dev
     TOOLCHAIN="$(grep "channel" /opt/scanopy/backend/rust-toolchain.toml | awk -F\" '{print $2}')"
     RUST_TOOLCHAIN=$TOOLCHAIN setup_rust
 
-    [[ -f /opt/scanopy.env ]] && mv /opt/scanopy.env /opt/scanopy/.env
-    [[ -f /opt/scanopy.oidc.toml ]] && mv /opt/scanopy.oidc.toml /opt/scanopy/oidc.toml
     if ! grep -q "PUBLIC_URL" /opt/scanopy/.env; then
       sed -i "\|_PATH=|a\\scanopy_PUBLIC_URL=http://${LOCAL_IP}:60072" /opt/scanopy/.env
     fi
@@ -56,7 +55,7 @@ function update_script() {
 
     msg_info "Building Scanopy Server (patience)"
     cd /opt/scanopy/backend
-    $STD cargo build --release --bin server --bin generate-fixtures
+    CARGO_BUILD_JOBS="$(get_parallel_jobs)" $STD cargo build --release --bin server --bin generate-fixtures
     $STD ./target/release/generate-fixtures --output-dir /opt/scanopy/ui/src/lib/data
     mv ./target/release/server /usr/bin/scanopy-server
     msg_ok "Built Scanopy Server"

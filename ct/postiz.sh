@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+_CS_DEFAULT_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main"
+_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
+source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
 
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: MickLesk (CanbiZ)
@@ -41,9 +43,10 @@ function update_script() {
 
     CLEAN_INSTALL=1 fetch_and_deploy_gh_release "postiz" "gitroomhq/postiz-app" "tarball"
 
+    restore_backup
+
     msg_info "Building Application"
     cd /opt/postiz
-    cp /opt/postiz_env.bak /opt/postiz/.env
     set -a && source /opt/postiz/.env && set +a
     export NODE_OPTIONS="--max-old-space-size=4096"
     $STD pnpm install
@@ -57,7 +60,6 @@ function update_script() {
     msg_ok "Ran Database Migrations"
 
     mkdir -p /opt/postiz/uploads
-    restore_backup
 
     msg_info "Starting Services"
     systemctl start postiz-backend postiz-frontend postiz-orchestrator
