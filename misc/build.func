@@ -150,6 +150,70 @@ _bootstrap_source "$_FUNC_BASE/error_handler.func" catch_errors
 load_functions
 catch_errors
 
+# ===== IVES_PATCH_MARKER : Proxmox VE 6 sur confirmation =================
+# Upstream pve_check() (misc/core.func) rejects every release outside 8.0-8.9
+# and 9.0-9.2. Some PVE 6.4 hosts are still in service here, so they are
+# accepted after an explicit confirmation; every other release keeps the
+# upstream verdict. Must stay after core.func is sourced: it wraps pve_check.
+: "${var_pve6_force:=}"
+
+ives_pve6_confirm() {
+  local ver="$1" sep confirm
+  sep="$(printf '%.0s=' {1..76})"
+  echo ""
+  echo -e "${RD}${BOLD}${sep}${CL}"
+  echo -e "${RD}${BOLD}  PROXMOX VE ${ver} : COMBINAISON NON SUPPORTEE AVEC ALMALINUX 9${CL}"
+  echo -e "${RD}${BOLD}${sep}${CL}"
+  echo -e "${TAB}L'hote PVE 6 (Debian 10) utilise cgroup v1 par defaut, alors que"
+  echo -e "${TAB}le conteneur AlmaLinux 9 (systemd 252) attend cgroup v2."
+  echo -e "${TAB}Le framework amont ne supporte que PVE 8.0-8.9 et 9.0-9.2."
+  echo -e "${TAB}Le template almalinux-9 peut etre absent du catalogue PVE 6."
+  echo ""
+  echo -e "${TAB}Le conteneur peut ne pas demarrer, ou demarrer avec des services"
+  echo -e "${TAB}instables. Aucune assistance n'est fournie sur cette combinaison."
+  echo -e "${RD}${BOLD}${sep}${CL}"
+  echo ""
+
+  if [[ "${var_pve6_force,,}" == "yes" ]]; then
+    msg_warn "var_pve6_force=yes : poursuite sans confirmation sur PVE ${ver}"
+    return 0
+  fi
+
+  # Opening /dev/tty is the only reliable probe: the node exists with read
+  # permission even when the process has no controlling terminal.
+  if ! { : </dev/tty; } 2>/dev/null; then
+    msg_error "Aucun terminal disponible pour confirmer PVE ${ver}."
+    msg_error "Exportez var_pve6_force=yes pour assumer le risque sans confirmation."
+    exit 105
+  fi
+
+  echo -n "${TAB}Continuer malgre tout ? (y/N) : "
+  read -r confirm </dev/tty || confirm=""
+  if [[ ! "${confirm,,}" =~ ^(y|yes)$ ]]; then
+    msg_warn "Creation abandonnee (Proxmox VE ${ver})."
+    exit 0
+  fi
+  msg_warn "Poursuite sur PVE ${ver} a vos risques et perils."
+}
+
+# Wrap instead of redefine: a future upstream release range is picked up without
+# touching this patch. Guarded so a renamed upstream function fails loudly.
+if declare -f pve_check >/dev/null 2>&1; then
+  eval "ives_pve_check_upstream() $(declare -f pve_check | tail -n +2)"
+  pve_check() {
+    local ver=""
+    if on_pve_host; then
+      ver="$(pveversion | awk -F'/' '{print $2}' | awk -F'-' '{print $1}')"
+    fi
+    if [[ "$ver" =~ ^6\. ]]; then
+      ives_pve6_confirm "$ver"
+      return 0
+    fi
+    ives_pve_check_upstream
+  }
+fi
+# ============================================================================
+
 # ==============================================================================
 # SECTION 2: PRE-FLIGHT CHECKS & SYSTEM VALIDATION
 # ==============================================================================
