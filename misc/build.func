@@ -1064,11 +1064,18 @@ resolve_os_version() {
     [[ "$v" == "$want" ]] && return 0
   done
 
-  # Already downloaded counts as available even if the catalog dropped it
-  if [[ -n "${TEMPLATE_STORAGE:-}" ]] &&
-    pveam list "$TEMPLATE_STORAGE" 2>/dev/null | grep -q "/${ostype}-${want}-"; then
-    return 0
-  fi
+  # IVES_PATCH_MARKER: already downloaded counts as available even if the
+  # catalog dropped it. TEMPLATE_STORAGE is still empty on the default install
+  # path (it is only resolved later, in build_container_options), so the
+  # upstream guard never fired there and an on-disk template was ignored. Scan
+  # every storage able to hold templates instead.
+  local _ives_stores _ives_store
+  _ives_stores="$(pvesm status -content vztmpl 2>/dev/null | awk 'NR>1 {print $1}' || true)"
+  for _ives_store in ${TEMPLATE_STORAGE:-} ${var_template_storage:-} local $_ives_stores; do
+    if pveam list "$_ives_store" 2>/dev/null | grep -q "/${ostype}-${want}-"; then
+      return 0
+    fi
+  done
 
   local candidate
   candidate=$(printf '%s\n' "${versions[@]}" | awk -v want="$want" '
