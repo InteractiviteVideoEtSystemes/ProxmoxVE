@@ -35,3 +35,4 @@ vm/*.bak
 json/
 json/*.bak
 json/*.tmp
+.devcontainer/
