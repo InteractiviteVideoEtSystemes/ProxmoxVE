@@ -25,6 +25,18 @@ is_private_ipv4() {
   return 1
 }
 ives_gateway_ok() { validate_gateway_in_subnet "$1" "$2" || is_private_ipv4 "$2"; }
+# Container hostname = <label>.<zone>. The zone is appended unless already
+# present, so the result is the same whether a label or an FQDN was given.
+ives_ct_fqdn() {
+  local hn="${1,,}" dom="${var_domain:-${var_searchdomain:-}}"
+  hn="${hn%.}"
+  dom="${dom,,}"
+  dom="${dom%.}"
+  if [[ -n "$dom" && "$hn" != "$dom" && "$hn" != *".${dom}" ]]; then
+    hn="${hn}.${dom}"
+  fi
+  printf '%s' "$hn"
+}
 # ============================================================================
 # Copyright (c) 2021-2026 community-scripts ORG
 # Author: tteck (tteckster) | MickLesk | michelroegl-brunner
@@ -1199,7 +1211,7 @@ base_settings() {
     fi
     requested_hostname="$NSAPP"
   fi
-  HN="$requested_hostname"
+  HN="$(ives_ct_fqdn "$requested_hostname")"
 
   BRG=${var_brg:-"vmbr0"}
   SDN_VNET=${var_sdn_vnet:-""}
@@ -3253,7 +3265,7 @@ Advanced:
   CT_TYPE="$_ct_type"
   PW="$_pw"
   CT_ID="$_ct_id"
-  HN="$_hostname"
+  HN="$(ives_ct_fqdn "$_hostname")"
   DISK_SIZE="$_disk_size"
   CORE_COUNT="$_core_count"
   RAM_SIZE="$_ram_size"
@@ -4542,9 +4554,10 @@ build_container() {
   fi
   export IVES_BASE_FUNC
   # IVES: infos d'hote pour le socle (detection preprod fiable, independante du DNS)
-  export IVES_HOSTNAME="${HN:-}"
   export IVES_DOMAIN="${var_domain:-${var_searchdomain:-}}"
-  export IVES_FQDN="${HN:-}${IVES_DOMAIN:+.${IVES_DOMAIN}}"
+  export IVES_FQDN="$(ives_ct_fqdn "${HN:-}")"
+  local _ives_zone="${IVES_DOMAIN,,}"
+  export IVES_HOSTNAME="${IVES_FQDN%".${_ives_zone%.}"}"
   # IVES: comptes generiques (operation = sudo avec mot de passe ; 4n51bl3 = NOPASSWD)
   # Les mots de passe (root + operation) sont generes et poses par l'HOTE apres
   # l'install (ives_set_passwords, transmission par stdin) puis livres via PrivateBin.
